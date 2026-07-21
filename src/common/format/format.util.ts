@@ -43,10 +43,13 @@ export type SerializedSessionUser = {
   name: string | null;
   email: string;
   image: string | null;
+  role: string;
   homeNeighborhood: string | null;
   eventInterests: string[];
   eventGoals: string[];
   memberSince: string;
+  createdAt: string;
+  onboardingCompletedAt: string | null;
 };
 
 export function serializeSessionUser(user: User): SerializedSessionUser {
@@ -55,6 +58,7 @@ export function serializeSessionUser(user: User): SerializedSessionUser {
     name: user.name,
     email: user.email ?? "",
     image: user.image,
+    role: user.role,
     homeNeighborhood: user.homeNeighborhood,
     eventInterests: user.eventInterests,
     eventGoals: user.eventGoals,
@@ -62,5 +66,7 @@ export function serializeSessionUser(user: User): SerializedSessionUser {
       month: "long",
       year: "numeric",
     }),
+    createdAt: user.createdAt.toISOString(),
+    onboardingCompletedAt: user.onboardingCompletedAt?.toISOString() ?? null,
   };
 }

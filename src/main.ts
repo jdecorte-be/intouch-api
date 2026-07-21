@@ -1,8 +1,14 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { NextFunction, Request, Response } from "express";
 
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+
+// Public, unauthenticated discovery endpoints — these deliberately stay
+// wide open to cross-origin browser requests, matching the original app's
+// single `Access-Control-Allow-Origin: *` on GET /api/events.
+const PUBLIC_CORS_PATHS = new Set(["/events", "/geocode/address-suggestions"]);
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -24,6 +30,13 @@ async function bootstrap() {
   app.enableCors({
     origin: configuredOrigins.length > 0 ? configuredOrigins : true,
     credentials: true,
+  });
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === "GET" && PUBLIC_CORS_PATHS.has(req.path)) {
+      res.header("Access-Control-Allow-Origin", "*");
+    }
+    next();
   });
 
   const port = process.env.PORT ? Number(process.env.PORT) : 4000;

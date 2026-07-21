@@ -1,8 +1,14 @@
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_22", "npm-10_x"]
+
 [phases.install]
 cmds = ["npm ci"]
 
 [phases.build]
+cacheDirectories = [".nest/cache", "node_modules/.cache"]
 cmds = ["npx prisma generate", "npm run build"]
 
 [start]
-cmd = "npm run start:prod"
+cmd = "npx prisma migrate deploy && npm run start:prod"
