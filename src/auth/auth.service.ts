@@ -28,6 +28,13 @@ export class AuthServiceException extends Error {
   }
 }
 
+// A scrypt hash of an unguessable placeholder, used to keep authenticate()'s
+// timing constant whether or not the account exists — otherwise a missing
+// user short-circuits before password.verify() runs, letting an attacker
+// distinguish "no such account" from "wrong password" by response time.
+const DUMMY_PASSWORD_HASH =
+  "a9add1a2b11dca4b588ef0a0c292f065:c02659834198d78bd7f2ed2935a02e1f39f91a0ca3f4b008d2022664304c257e2f4fa416fd44d479ca049443746e226a0828d161eb9a446794ea8d3f4739e09b";
+
 function toHttpException(code: AuthServiceError): Error {
   if (code === "CredentialsInvalid") return new UnauthorizedException(code);
   if (code === "EmailAlreadyRegistered") return new ConflictException(code);
@@ -85,13 +92,11 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({ where: { email } });
 
-    if (!user?.passwordHash || user.bannedAt) {
-      throw toHttpException("CredentialsInvalid");
-    }
+    // Always run verify(), even when there's no real hash to check against,
+    // so the response time doesn't reveal whether the account exists.
+    const isValidPassword = await this.password.verify(input.password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
 
-    const isValidPassword = await this.password.verify(input.password, user.passwordHash);
-
-    if (!isValidPassword) {
+    if (!user?.passwordHash || user.bannedAt || !isValidPassword) {
       throw toHttpException("CredentialsInvalid");
     }
 

@@ -32,7 +32,7 @@ export class ChatsController {
 
   @Post(":threadId/messages")
   async sendMessage(@Param("threadId") threadId: string, @CurrentUser() user: User, @Body() dto: SendChatMessageDto) {
-    await this.chats.sendChatMessageForUser(user.id, user.name || user.email || "You", threadId, dto.text);
+    await this.chats.sendChatMessageForUser(user.id, user.name || user.email || "You", threadId, dto.text ?? "", dto.image);
 
     return { thread: await this.chats.getChatThread(user.id, threadId) };
   }

@@ -1,6 +1,8 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import compression from "compression";
 import type { NextFunction, Request, Response } from "express";
+import helmet from "helmet";
 
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
@@ -12,6 +14,14 @@ const PUBLIC_CORS_PATHS = new Set(["/events", "/geocode/address-suggestions"]);
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // contentSecurityPolicy is meant for browser-rendered pages; this is a
+  // pure JSON API. crossOriginResourcePolicy is relaxed to cross-origin
+  // since some endpoints are deliberately fetched from other origins (see
+  // PUBLIC_CORS_PATHS below) and the rest are gated by CORS_ORIGINS/auth,
+  // not CORP.
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: "cross-origin" } }));
+  app.use(compression());
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -1,7 +1,13 @@
 import type { User } from "@prisma/client";
 
+// Self-hosted (see ../../avatars/avatars.controller.ts) rather than
+// source.boringavatars.com, which turned out to be a paid/subscription
+// service with no documented free tier — not something to depend on for
+// every user's default avatar.
 export function getDefaultAvatarUrl(seed: string) {
-  return `https://source.boringavatars.com/beam/120/${encodeURIComponent(seed)}`;
+  const baseUrl = (process.env.APP_BASE_URL || "http://localhost:4000").replace(/\/$/, "");
+
+  return `${baseUrl}/avatars/beam/${encodeURIComponent(seed)}`;
 }
 
 export function getUserInitials(label: string) {
@@ -43,8 +49,13 @@ export type SerializedSessionUser = {
   name: string | null;
   email: string;
   image: string | null;
+  photos: string[];
+  age: number | null;
+  gender: string | null;
+  languagesSpoken: string[];
   role: string;
   homeNeighborhood: string | null;
+  homeCoordinates: [number, number] | null;
   eventInterests: string[];
   eventGoals: string[];
   memberSince: string;
@@ -58,8 +69,14 @@ export function serializeSessionUser(user: User): SerializedSessionUser {
     name: user.name,
     email: user.email ?? "",
     image: user.image,
+    photos: user.photos,
+    age: user.age,
+    gender: user.gender,
+    languagesSpoken: user.languagesSpoken,
     role: user.role,
     homeNeighborhood: user.homeNeighborhood,
+    homeCoordinates:
+      user.homeLongitude != null && user.homeLatitude != null ? [user.homeLongitude, user.homeLatitude] : null,
     eventInterests: user.eventInterests,
     eventGoals: user.eventGoals,
     memberSince: user.createdAt.toLocaleDateString("en-US", {

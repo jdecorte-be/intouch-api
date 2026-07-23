@@ -16,7 +16,13 @@ model User {
   passwordHash          String?
   emailVerified         DateTime?
   image                 String?
+  photos                String[]  @default([])
+  age                   Int?
+  gender                String?
+  languagesSpoken       String[]  @default([])
   homeNeighborhood      String?
+  homeLatitude          Float?
+  homeLongitude         Float?
   eventInterests        String[]  @default([])
   eventGoals            String[]  @default([])
   onboardingCompletedAt DateTime?
@@ -68,6 +74,7 @@ model ChatMessage {
   authorId   String?
   authorName String
   text       String
+  imageUrl   String?
   createdAt  DateTime @default(now())
 
   thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)

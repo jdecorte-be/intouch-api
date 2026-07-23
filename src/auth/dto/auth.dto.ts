@@ -1,4 +1,6 @@
-import { IsArray, IsEmail, IsOptional, IsString, MinLength } from "class-validator";
+import { IsArray, IsEmail, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, MinLength } from "class-validator";
+
+export const GENDER_VALUES = ["woman", "man", "non-binary", "prefer-not-to-say"] as const;
 
 export class RegisterDto {
   @IsString()
@@ -44,8 +46,40 @@ export class OnboardingDto {
   name?: string;
 
   @IsOptional()
+  @IsInt()
+  @Min(13)
+  @Max(110)
+  age?: number;
+
+  @IsOptional()
+  @IsIn(GENDER_VALUES)
+  gender?: (typeof GENDER_VALUES)[number];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  languagesSpoken?: string[];
+
+  @IsOptional()
+  @IsString()
+  image?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  photos?: string[];
+
+  @IsOptional()
   @IsString()
   homeNeighborhood?: string;
+
+  @IsOptional()
+  @IsNumber()
+  homeLatitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  homeLongitude?: number;
 
   @IsOptional()
   @IsArray()

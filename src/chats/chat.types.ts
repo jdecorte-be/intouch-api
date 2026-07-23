@@ -1,10 +1,18 @@
 export type ChatMessageView = {
   id: string;
   author: string;
+  authorId: string | null;
   authorImage: string | null;
   fromSelf: boolean;
   text: string;
+  image: string | null;
   sentAt: string;
+};
+
+export type ChatParticipantView = {
+  id: string;
+  name: string;
+  image: string | null;
 };
 
 export type ChatThreadView = {
@@ -15,6 +23,8 @@ export type ChatThreadView = {
   accent: string;
   initials: string;
   unreadCount: number;
+  participants: ChatParticipantView[];
+  participantCount: number;
   messages: ChatMessageView[];
 };
 

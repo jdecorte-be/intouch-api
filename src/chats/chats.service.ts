@@ -9,13 +9,13 @@ import { formatChatTimestamp, type ChatThreadView } from "./chat.types";
 type ThreadWithMessages = Prisma.ChatThreadGetPayload<{
   include: {
     messages: { include: { author: { select: { image: true } } } };
-    participants: { include: { user: { select: { name: true; email: true } } } };
+    participants: { include: { user: { select: { id: true; name: true; email: true; image: true } } } };
   };
 }>;
 
 const threadInclude = {
   messages: { orderBy: { createdAt: "asc" as const }, include: { author: { select: { image: true } } } },
-  participants: { include: { user: { select: { name: true, email: true } } } },
+  participants: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
 };
 
 @Injectable()
@@ -40,12 +40,20 @@ export class ChatsService {
       unreadCount: thread.messages.filter(
         (message) => message.authorId !== viewerId && (!viewerParticipant?.lastReadAt || message.createdAt > viewerParticipant.lastReadAt),
       ).length,
+      participants: thread.participants.map((participant) => ({
+        id: participant.user.id,
+        name: participant.user.name || participant.user.email?.replace(/@.*/, "") || "Member",
+        image: participant.user.image ?? null,
+      })),
+      participantCount: thread.participants.length,
       messages: thread.messages.map((message) => ({
         id: message.id,
         author: message.authorName,
+        authorId: message.authorId,
         authorImage: message.author?.image ?? null,
         fromSelf: message.authorId !== null && message.authorId === viewerId,
         text: message.text,
+        image: message.imageUrl ?? null,
         sentAt: formatChatTimestamp(message.createdAt),
       })),
     };
@@ -171,10 +179,10 @@ export class ChatsService {
     return this.getChatThread(userId, thread.id);
   }
 
-  async sendChatMessageForUser(userId: string, userDisplayName: string, threadId: string, text: string) {
+  async sendChatMessageForUser(userId: string, userDisplayName: string, threadId: string, text: string, image?: string) {
     const trimmedText = text.trim();
 
-    if (!trimmedText) {
+    if (!trimmedText && !image) {
       return;
     }
 
@@ -187,7 +195,7 @@ export class ChatsService {
     }
 
     await this.prisma.chatMessage.create({
-      data: { threadId, authorId: userId, authorName: userDisplayName, text: trimmedText },
+      data: { threadId, authorId: userId, authorName: userDisplayName, text: trimmedText, imageUrl: image ?? null },
     });
   }
 }

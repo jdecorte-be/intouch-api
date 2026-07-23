@@ -10,6 +10,12 @@ import { PrismaService } from "../prisma/prisma.service";
 // a sliding 30-day expiry. No JWT signing/verification involved.
 const sessionTtlMs = 1000 * 60 * 60 * 24 * 30; // 30 days
 
+// Sliding expiry only needs to be persisted once it's gotten reasonably
+// stale — refreshing it on every single request would mean a DB write per
+// API call for every active user. Bumping it only once a day still keeps
+// active sessions from ever approaching the TTL.
+const sessionRefreshThresholdMs = 1000 * 60 * 60 * 24; // 1 day
+
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -49,11 +55,16 @@ export class SessionService {
     }
 
     // Sliding expiration so active users are never signed out just for
-    // being under the TTL between requests.
-    await this.prisma.session.update({
-      where: { sessionToken },
-      data: { expires: new Date(Date.now() + sessionTtlMs) },
-    });
+    // being under the TTL between requests. Only actually write it once the
+    // stored expiry is more than a day old, to avoid a DB write per request.
+    const staleBy = session.expires.getTime() - (sessionTtlMs - sessionRefreshThresholdMs);
+
+    if (staleBy <= Date.now()) {
+      await this.prisma.session.update({
+        where: { sessionToken },
+        data: { expires: new Date(Date.now() + sessionTtlMs) },
+      });
+    }
 
     return session.user;
   }

@@ -6,6 +6,7 @@ import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AdminStatsModule } from "./admin-stats/admin-stats.module";
 import { AppController } from "./app.controller";
 import { AuthModule } from "./auth/auth.module";
+import { AvatarsModule } from "./avatars/avatars.module";
 import { ChatsModule } from "./chats/chats.module";
 import { CommentsModule } from "./comments/comments.module";
 import { MailerModule } from "./common/mailer/mailer.module";
@@ -29,6 +30,7 @@ import { UsersModule } from "./users/users.module";
     PasswordModule,
     SessionModule,
     AuthModule,
+    AvatarsModule,
     GeocodeModule,
     EventsModule,
     EventInterestModule,

@@ -1,4 +1,4 @@
-import { IsString } from "class-validator";
+import { IsOptional, IsString } from "class-validator";
 
 export class JoinEventChatDto {
   @IsString()
@@ -17,6 +17,11 @@ export class StartDirectChatDto {
 }
 
 export class SendChatMessageDto {
+  @IsOptional()
   @IsString()
-  text!: string;
+  text?: string;
+
+  @IsOptional()
+  @IsString()
+  image?: string;
 }
