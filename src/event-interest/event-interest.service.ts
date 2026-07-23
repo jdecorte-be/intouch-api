@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException } from '@nestjs/common';
 
-import { staticEvents } from "../events/event-catalog.const";
-import { EventsService } from "../events/events.service";
-import { PrismaService } from "../prisma/prisma.service";
+import { staticEvents } from '../events/event-catalog.const';
+import { EventsService } from '../events/events.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 export type EventInterestView = {
   going: number;
@@ -14,15 +15,30 @@ export class EventInterestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
-  async getEventInterestView(eventId: string, viewerId?: string): Promise<EventInterestView> {
+  async getEventInterestView(
+    eventId: string,
+    viewerId?: string,
+  ): Promise<EventInterestView> {
     const [event, interest, staticInterestCount] = await Promise.all([
-      this.prisma.event.findUnique({ where: { id: eventId }, select: { going: true } }),
-      viewerId ? this.prisma.eventInterest.findUnique({ where: { eventId_userId: { eventId, userId: viewerId } } }) : Promise.resolve(null),
-      staticEvents.some((event) => event.id === eventId) ? this.prisma.eventInterest.count({ where: { eventId } }) : Promise.resolve(0),
+      this.prisma.event.findUnique({
+        where: { id: eventId },
+        select: { going: true },
+      }),
+      viewerId
+        ? this.prisma.eventInterest.findUnique({
+            where: { eventId_userId: { eventId, userId: viewerId } },
+          })
+        : Promise.resolve(null),
+      staticEvents.some((event) => event.id === eventId)
+        ? this.prisma.eventInterest.count({ where: { eventId } })
+        : Promise.resolve(0),
     ]);
-    const staticEvent = event ? null : staticEvents.find((event) => event.id === eventId);
+    const staticEvent = event
+      ? null
+      : staticEvents.find((event) => event.id === eventId);
 
     return {
       going: event?.going ?? (staticEvent?.going ?? 0) + staticInterestCount,
@@ -30,11 +46,14 @@ export class EventInterestService {
     };
   }
 
-  async toggleEventInterest(eventId: string, userId: string): Promise<EventInterestView> {
+  async toggleEventInterest(
+    eventId: string,
+    userId: string,
+  ): Promise<EventInterestView> {
     const event = await this.events.findEventItem(eventId);
 
     if (!event) {
-      throw new NotFoundException("Event not found");
+      throw new NotFoundException('Event not found');
     }
 
     const existing = await this.prisma.eventInterest.findUnique({
@@ -53,7 +72,10 @@ export class EventInterestService {
       if (hostedEvent) {
         await this.prisma.$transaction([
           this.prisma.eventInterest.delete({ where: { id: existing.id } }),
-          this.prisma.event.updateMany({ where: { id: eventId, going: { gt: 0 } }, data: { going: { decrement: 1 } } }),
+          this.prisma.event.updateMany({
+            where: { id: eventId, going: { gt: 0 } },
+            data: { going: { decrement: 1 } },
+          }),
         ]);
       } else {
         await this.prisma.eventInterest.delete({ where: { id: existing.id } });
@@ -62,8 +84,19 @@ export class EventInterestService {
       if (hostedEvent) {
         await this.prisma.$transaction([
           this.prisma.eventInterest.create({ data: { eventId, userId } }),
-          this.prisma.event.update({ where: { id: eventId }, data: { going: { increment: 1 } } }),
+          this.prisma.event.update({
+            where: { id: eventId },
+            data: { going: { increment: 1 } },
+          }),
         ]);
+
+        await this.notifications.create({
+          recipientId: hostedEvent.hostId,
+          actorId: userId,
+          kind: 'like',
+          eventId,
+          title: `Liked ${event.title}`,
+        });
       } else {
         await this.prisma.eventInterest.create({ data: { eventId, userId } });
       }
