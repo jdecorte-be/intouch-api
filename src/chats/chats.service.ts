@@ -8,15 +8,37 @@ import { formatChatTimestamp, type ChatThreadView } from "./chat.types";
 
 type ThreadWithMessages = Prisma.ChatThreadGetPayload<{
   include: {
-    messages: { include: { author: { select: { image: true } } } };
+    messages: { include: { author: { select: { image: true } }; reactions: true } };
     participants: { include: { user: { select: { id: true; name: true; email: true; image: true } } } };
   };
 }>;
 
 const threadInclude = {
-  messages: { orderBy: { createdAt: "asc" as const }, include: { author: { select: { image: true } } } },
+  messages: {
+    orderBy: { createdAt: "asc" as const },
+    include: { author: { select: { image: true } }, reactions: true },
+  },
   participants: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
 };
+
+function groupReactions(reactions: { emoji: string; userId: string }[], viewerId: string) {
+  const order: string[] = [];
+  const counts = new Map<string, { count: number; reactedByMe: boolean }>();
+
+  for (const reaction of reactions) {
+    const existing = counts.get(reaction.emoji);
+
+    if (existing) {
+      existing.count += 1;
+      existing.reactedByMe = existing.reactedByMe || reaction.userId === viewerId;
+    } else {
+      order.push(reaction.emoji);
+      counts.set(reaction.emoji, { count: 1, reactedByMe: reaction.userId === viewerId });
+    }
+  }
+
+  return order.map((emoji) => ({ emoji, ...counts.get(emoji)! }));
+}
 
 @Injectable()
 export class ChatsService {
@@ -37,6 +59,7 @@ export class ChatsService {
       subtitle: thread.subtitle,
       accent: thread.accent,
       initials: counterpartName ? getUserInitials(counterpartName) : thread.initials,
+      avatarImage: counterpart?.image ?? null,
       unreadCount: thread.messages.filter(
         (message) => message.authorId !== viewerId && (!viewerParticipant?.lastReadAt || message.createdAt > viewerParticipant.lastReadAt),
       ).length,
@@ -55,6 +78,8 @@ export class ChatsService {
         text: message.text,
         image: message.imageUrl ?? null,
         sentAt: formatChatTimestamp(message.createdAt),
+        kind: message.kind === "system" ? "system" : "text",
+        reactions: groupReactions(message.reactions, viewerId),
       })),
     };
   }
@@ -90,7 +115,7 @@ export class ChatsService {
     });
   }
 
-  async joinEventChatForUser(userId: string, eventId: string): Promise<ChatThreadView> {
+  async joinEventChatForUser(userId: string, userDisplayName: string, eventId: string): Promise<ChatThreadView> {
     const event = await this.events.findEventItem(eventId);
 
     if (!event) {
@@ -99,6 +124,11 @@ export class ChatsService {
 
     const threadId = `event-chat-${event.id}`;
     const threadInitials = event.kind === "group" ? event.icon : getUserInitials(event.title);
+    const existingThread = await this.prisma.chatThread.findUnique({ where: { id: threadId } });
+    const existingParticipant = existingThread
+      ? await this.prisma.chatThreadParticipant.findUnique({ where: { threadId_userId: { threadId, userId } } })
+      : null;
+
     const thread = await this.prisma.chatThread.upsert({
       where: { id: threadId },
       update: {
@@ -130,7 +160,30 @@ export class ChatsService {
       create: { threadId, userId, lastReadAt: new Date() },
     });
 
+    if (existingThread && !existingParticipant) {
+      await this.createSystemMessage(threadId, `${userDisplayName} joined the chat`);
+    }
+
     return this.getChatThread(userId, thread.id);
+  }
+
+  async leaveEventChatForUser(userId: string, userDisplayName: string, threadId: string) {
+    const thread = await this.prisma.chatThread.findFirst({
+      where: { id: threadId, kind: "event", participants: { some: { userId } } },
+    });
+
+    if (!thread) {
+      throw new NotFoundException("Chat not found");
+    }
+
+    await this.prisma.chatThreadParticipant.delete({ where: { threadId_userId: { threadId, userId } } });
+    await this.createSystemMessage(threadId, `${userDisplayName} left the chat`);
+  }
+
+  private async createSystemMessage(threadId: string, text: string) {
+    await this.prisma.chatMessage.create({
+      data: { threadId, authorName: "System", text, kind: "system" },
+    });
   }
 
   async startDirectChatForUser(userId: string, member: string, memberUserId: string, eventId: string): Promise<ChatThreadView> {
@@ -197,5 +250,31 @@ export class ChatsService {
     await this.prisma.chatMessage.create({
       data: { threadId, authorId: userId, authorName: userDisplayName, text: trimmedText, imageUrl: image ?? null },
     });
+  }
+
+  async toggleMessageReactionForUser(userId: string, threadId: string, messageId: string, emoji: string) {
+    const participant = await this.prisma.chatThreadParticipant.findUnique({
+      where: { threadId_userId: { threadId, userId } },
+    });
+
+    if (!participant) {
+      throw new BadRequestException("Not a participant of this chat");
+    }
+
+    const message = await this.prisma.chatMessage.findFirst({ where: { id: messageId, threadId } });
+
+    if (!message) {
+      throw new NotFoundException("Message not found");
+    }
+
+    const existing = await this.prisma.chatMessageReaction.findUnique({
+      where: { messageId_userId_emoji: { messageId, userId, emoji } },
+    });
+
+    if (existing) {
+      await this.prisma.chatMessageReaction.delete({ where: { id: existing.id } });
+    } else {
+      await this.prisma.chatMessageReaction.create({ data: { messageId, userId, emoji } });
+    }
   }
 }

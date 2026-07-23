@@ -31,6 +31,7 @@ model User {
   hostedEvents          Event[]
   chatThreads           ChatThreadParticipant[]
   chatMessages          ChatMessage[]
+  chatMessageReactions  ChatMessageReaction[]
   eventReports          EventReport[]
   eventComments         EventComment[]
   eventInterestMarks    EventInterest[]
@@ -77,13 +78,30 @@ model ChatMessage {
   authorName String
   text       String
   imageUrl   String?
+  kind       String   @default("text") // "text" | "system"
   createdAt  DateTime @default(now())
 
-  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  author User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  thread    ChatThread            @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author    User?                 @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  reactions ChatMessageReaction[]
 
   @@index([threadId])
   @@map("chat_messages")
+}
+
+model ChatMessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@map("chat_message_reactions")
 }
 
 model Event {

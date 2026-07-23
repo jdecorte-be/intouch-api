@@ -4,7 +4,7 @@ import type { User } from "@prisma/client";
 import { BearerAuthGuard } from "../session/bearer-auth.guard";
 import { CurrentUser } from "../session/current-user.decorator";
 import { ChatsService } from "./chats.service";
-import { JoinEventChatDto, SendChatMessageDto, StartDirectChatDto } from "./dto/chats.dto";
+import { JoinEventChatDto, SendChatMessageDto, StartDirectChatDto, ToggleReactionDto } from "./dto/chats.dto";
 
 @Controller("chats")
 @UseGuards(BearerAuthGuard)
@@ -39,11 +39,30 @@ export class ChatsController {
 
   @Post("join")
   async join(@CurrentUser() user: User, @Body() dto: JoinEventChatDto) {
-    return { thread: await this.chats.joinEventChatForUser(user.id, dto.eventId) };
+    return { thread: await this.chats.joinEventChatForUser(user.id, user.name || user.email || "Someone", dto.eventId) };
   }
 
   @Post("direct")
   async direct(@CurrentUser() user: User, @Body() dto: StartDirectChatDto) {
     return { thread: await this.chats.startDirectChatForUser(user.id, dto.member, dto.memberUserId, dto.eventId) };
+  }
+
+  @Post(":threadId/leave")
+  @HttpCode(200)
+  async leave(@Param("threadId") threadId: string, @CurrentUser() user: User) {
+    await this.chats.leaveEventChatForUser(user.id, user.name || user.email || "Someone", threadId);
+    return { ok: true };
+  }
+
+  @Post(":threadId/messages/:messageId/reactions")
+  async react(
+    @Param("threadId") threadId: string,
+    @Param("messageId") messageId: string,
+    @CurrentUser() user: User,
+    @Body() dto: ToggleReactionDto,
+  ) {
+    await this.chats.toggleMessageReactionForUser(user.id, threadId, messageId, dto.emoji);
+
+    return { thread: await this.chats.getChatThread(user.id, threadId) };
   }
 }

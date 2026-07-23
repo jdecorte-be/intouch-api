@@ -25,3 +25,8 @@ export class SendChatMessageDto {
   @IsString()
   image?: string;
 }
+
+export class ToggleReactionDto {
+  @IsString()
+  emoji!: string;
+}

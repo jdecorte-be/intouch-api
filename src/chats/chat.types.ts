@@ -1,3 +1,9 @@
+export type ChatMessageReactionView = {
+  emoji: string;
+  count: number;
+  reactedByMe: boolean;
+};
+
 export type ChatMessageView = {
   id: string;
   author: string;
@@ -7,6 +13,8 @@ export type ChatMessageView = {
   text: string;
   image: string | null;
   sentAt: string;
+  kind: "text" | "system";
+  reactions: ChatMessageReactionView[];
 };
 
 export type ChatParticipantView = {
@@ -22,6 +30,7 @@ export type ChatThreadView = {
   subtitle: string;
   accent: string;
   initials: string;
+  avatarImage: string | null;
   unreadCount: number;
   participants: ChatParticipantView[];
   participantCount: number;
