@@ -1,16 +1,18 @@
-import { ValidationPipe } from "@nestjs/common";
-import { NestFactory } from "@nestjs/core";
-import compression from "compression";
-import type { NextFunction, Request, Response } from "express";
-import helmet from "helmet";
+import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import compression from 'compression';
+import type { NextFunction, Request, Response } from 'express';
+import helmet from 'helmet';
+import supertokens from 'supertokens-node';
+import { middleware as supertokensMiddleware } from 'supertokens-node/framework/express';
 
-import { AppModule } from "./app.module";
-import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 // Public, unauthenticated discovery endpoints — these deliberately stay
 // wide open to cross-origin browser requests, matching the original app's
 // single `Access-Control-Allow-Origin: *` on GET /api/events.
-const PUBLIC_CORS_PATHS = new Set(["/events", "/geocode/address-suggestions"]);
+const PUBLIC_CORS_PATHS = new Set(['/events', '/geocode/address-suggestions']);
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -20,7 +22,12 @@ async function bootstrap() {
   // since some endpoints are deliberately fetched from other origins (see
   // PUBLIC_CORS_PATHS below) and the rest are gated by CORS_ORIGINS/auth,
   // not CORP.
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: "cross-origin" } }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.use(compression());
 
   app.useGlobalPipes(
@@ -32,19 +39,26 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  const configuredOrigins = (process.env.CORS_ORIGINS ?? "")
-    .split(",")
+  const configuredOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
   app.enableCors({
     origin: configuredOrigins.length > 0 ? configuredOrigins : true,
+    allowedHeaders: ['content-type', ...supertokens.getAllCORSHeaders()],
     credentials: true,
   });
 
+  // Serves SuperTokens' own auth routes (signup, signin, signout, session
+  // refresh, Google authorisationurl/signinup, password reset) under
+  // apiBasePath ("/auth" — see supertokens/supertokens.config.ts). Requests
+  // to any other path fall through to Nest's normal routing.
+  app.use(supertokensMiddleware());
+
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.method === "GET" && PUBLIC_CORS_PATHS.has(req.path)) {
-      res.header("Access-Control-Allow-Origin", "*");
+    if (req.method === 'GET' && PUBLIC_CORS_PATHS.has(req.path)) {
+      res.header('Access-Control-Allow-Origin', '*');
     }
     next();
   });

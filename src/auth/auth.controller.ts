@@ -1,199 +1,71 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
   HttpCode,
   Patch,
   Post,
-  Query,
   Req,
   Res,
   UseGuards,
-} from "@nestjs/common";
-import { Throttle } from "@nestjs/throttler";
-import type { Request, Response } from "express";
+} from '@nestjs/common';
+import type { User } from '@prisma/client';
+import type { Request, Response } from 'express';
+import EmailPassword from 'supertokens-node/recipe/emailpassword';
 
-import { serializeSessionUser } from "../common/format/format.util";
-import { MailerService } from "../common/mailer/mailer.service";
-import { PasswordService } from "../common/password/password.service";
-import { isOAuthProviderConfigured } from "../common/oauth-providers";
-import { PrismaService } from "../prisma/prisma.service";
-import { BearerAuthGuard } from "../session/bearer-auth.guard";
-import { getBearerToken } from "../session/bearer-token.util";
-import { CurrentUser } from "../session/current-user.decorator";
-import { SessionService } from "../session/session.service";
-import { AuthService, normalizeEmail } from "./auth.service";
-import {
-  ConfirmPasswordResetDto,
-  LoginDto,
-  OnboardingDto,
-  RegisterDto,
-  RequestPasswordResetDto,
-  UpdateAccountDto,
-} from "./dto/auth.dto";
-import { GoogleOAuthService } from "./google-oauth.service";
-import { createOAuthState, type OAuthClient, verifyOAuthState } from "./oauth-state.util";
-import { PasswordResetService } from "./password-reset.service";
+import { serializeSessionUser } from '../common/format/format.util';
+import { MailerService } from '../common/mailer/mailer.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { BearerAuthGuard } from '../session/bearer-auth.guard';
+import { CurrentUser } from '../session/current-user.decorator';
+import { OnboardingDto, UpdateAccountDto } from './dto/auth.dto';
 
-const MOBILE_AUTH_CALLBACK_URL = `${process.env.MOBILE_AUTH_SCHEME ?? "retalkapp"}://auth-callback`;
+const MOBILE_AUTH_DEEP_LINK = 'intouchapp://auth-callback';
 
-@Controller("auth")
+// Sign up, sign in, sign out, Google OAuth, and forgot-password are all
+// handled by SuperTokens' own default routes (mounted under /auth by the
+// middleware in main.ts — see ../supertokens/supertokens.config.ts). This
+// controller only covers the app-specific bits SuperTokens doesn't know
+// about: reading/updating the enriched Prisma profile.
+@Controller('auth')
 export class AuthController {
   constructor(
-    private readonly auth: AuthService,
-    private readonly sessions: SessionService,
     private readonly prisma: PrismaService,
-    private readonly password: PasswordService,
     private readonly mailer: MailerService,
-    private readonly passwordReset: PasswordResetService,
-    private readonly google: GoogleOAuthService,
   ) {}
 
-  private async issueSession(user: Awaited<ReturnType<AuthService["register"]>>) {
-    const token = await this.sessions.createSession(user.id);
-    return { token, user: serializeSessionUser(user) };
-  }
+  // Google's OAuth client only accepts https redirect URIs, so the mobile
+  // app can't ask Google to land straight on its intouchapp:// deep link.
+  // This is the https address Google is allowed to redirect to; it just
+  // forwards Google's query params (code, state, error, ...) on to the app
+  // unchanged via a real HTTP redirect.
+  @Get('mobile-callback')
+  mobileCallback(@Req() req: Request, @Res() res: Response) {
+    const target = new URL(MOBILE_AUTH_DEEP_LINK);
 
-  private getWebBaseUrl() {
-    return (process.env.WEB_APP_URL ?? process.env.APP_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  }
-
-  @Post("register")
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const user = await this.auth.register(dto);
-    res.status(201);
-    return this.issueSession(user);
-  }
-
-  @Post("login")
-  @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  async login(@Body() dto: LoginDto) {
-    const user = await this.auth.authenticate(dto);
-    return this.issueSession(user);
-  }
-
-  @Get("session")
-  @HttpCode(200)
-  async session(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const token = getBearerToken(req);
-    const user = token ? await this.sessions.getUserForToken(token) : null;
-
-    if (!user) {
-      res.status(401);
-      return { user: null };
-    }
-
-    return { user: serializeSessionUser(user) };
-  }
-
-  @Post("logout")
-  @HttpCode(200)
-  async logout(@Req() req: Request) {
-    const token = getBearerToken(req);
-
-    if (token) {
-      await this.sessions.deleteSession(token);
-    }
-
-    return { ok: true };
-  }
-
-  @Get("google")
-  async startGoogle(@Query("client") client: string | undefined, @Res() res: Response) {
-    const resolvedClient: OAuthClient = client === "mobile" ? "mobile" : "web";
-    const errorTarget =
-      resolvedClient === "mobile" ? MOBILE_AUTH_CALLBACK_URL : `${this.getWebBaseUrl()}/auth/callback`;
-
-    if (!isOAuthProviderConfigured("google")) {
-      res.redirect(`${errorTarget}?error=OAuthNotConfigured`);
-      return;
-    }
-
-    const state = createOAuthState(resolvedClient);
-    res.redirect(this.google.buildAuthorizeUrl(state));
-  }
-
-  @Get("google/callback")
-  async googleCallback(
-    @Query("code") code: string | undefined,
-    @Query("state") state: string | undefined,
-    @Query("error") oauthError: string | undefined,
-    @Res() res: Response,
-  ) {
-    const client = verifyOAuthState(state) ?? "web";
-    const callbackTarget = client === "mobile" ? MOBILE_AUTH_CALLBACK_URL : `${this.getWebBaseUrl()}/auth/callback`;
-
-    if (oauthError || !code) {
-      res.redirect(`${callbackTarget}?error=OAuthFailed`);
-      return;
-    }
-
-    try {
-      const profile = await this.google.exchangeCodeForProfile(code);
-      const user = await this.auth.handleGoogleProfile(profile);
-      const token = await this.sessions.createSession(user.id);
-
-      res.redirect(`${callbackTarget}?token=${encodeURIComponent(token)}`);
-    } catch {
-      res.redirect(`${callbackTarget}?error=OAuthFailed`);
-    }
-  }
-
-  @Post("password-reset/request")
-  @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
-    const email = normalizeEmail(dto.email);
-    const user = email ? await this.prisma.user.findUnique({ where: { email } }) : null;
-
-    if (user) {
-      const token = await this.passwordReset.createToken(email);
-      const resetUrl = `${this.getWebBaseUrl()}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
-
-      try {
-        await this.mailer.sendPasswordResetEmail(email, resetUrl);
-      } catch {
-        // Swallowed: still report success below so the endpoint can't be
-        // used to probe which emails have accounts.
+    for (const [key, value] of Object.entries(req.query)) {
+      if (typeof value === 'string') {
+        target.searchParams.set(key, value);
       }
     }
 
-    // Always report success, regardless of whether the email existed.
-    return { ok: true };
+    res.redirect(target.toString());
   }
 
-  @Post("password-reset/confirm")
-  @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  async confirmPasswordReset(@Body() dto: ConfirmPasswordResetDto) {
-    const email = normalizeEmail(dto.email);
-
-    if (dto.password !== dto.confirmPassword) {
-      throw new BadRequestException("PasswordMismatch");
-    }
-
-    const isValidToken = email && dto.token ? await this.passwordReset.consumeToken(email, dto.token) : false;
-    const user = isValidToken ? await this.prisma.user.findUnique({ where: { email } }) : null;
-
-    if (!user) {
-      throw new BadRequestException("ResetLinkInvalid");
-    }
-
-    await this.prisma.user.update({
-      where: { email },
-      data: { passwordHash: await this.password.hash(dto.password) },
-    });
-
-    return this.issueSession(user);
-  }
-
-  @Patch("onboarding")
+  @Get('session')
   @UseGuards(BearerAuthGuard)
   @HttpCode(200)
-  async completeOnboarding(@CurrentUser() user: { id: string }, @Body() dto: OnboardingDto) {
+  session(@CurrentUser() user: User) {
+    return { user: serializeSessionUser(user) };
+  }
+
+  @Patch('onboarding')
+  @UseGuards(BearerAuthGuard)
+  @HttpCode(200)
+  async completeOnboarding(
+    @CurrentUser() user: User,
+    @Body() dto: OnboardingDto,
+  ) {
     const updated = await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -215,10 +87,13 @@ export class AuthController {
     return { user: serializeSessionUser(updated) };
   }
 
-  @Patch("account")
+  @Patch('account')
   @UseGuards(BearerAuthGuard)
   @HttpCode(200)
-  async updateAccount(@CurrentUser() user: { id: string }, @Body() dto: UpdateAccountDto) {
+  async updateAccount(
+    @CurrentUser() user: User,
+    @Body() dto: UpdateAccountDto,
+  ) {
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -239,28 +114,41 @@ export class AuthController {
     return { saved: true };
   }
 
-  @Post("account/password-reset")
+  @Post('account/password-reset')
   @UseGuards(BearerAuthGuard)
   @HttpCode(200)
-  async requestAccountPasswordReset(@CurrentUser() user: { id: string; email: string | null }) {
+  async requestAccountPasswordReset(@CurrentUser() user: User) {
     const email = user.email?.trim().toLowerCase();
 
     if (!email) {
       return {
         sent: false,
-        error: "Add an email address to your account before resetting your password.",
+        error:
+          'Add an email address to your account before resetting your password.',
       };
     }
 
-    const token = await this.passwordReset.createToken(email);
-    const resetUrl = `${this.getWebBaseUrl()}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+    const linkResult = await EmailPassword.createResetPasswordLink(
+      'public',
+      user.id,
+      email,
+    );
+
+    if (linkResult.status !== 'OK') {
+      return {
+        sent: false,
+        error:
+          "We couldn't send a reset link right now. Try again in a moment.",
+      };
+    }
 
     try {
-      await this.mailer.sendPasswordResetEmail(email, resetUrl);
+      await this.mailer.sendPasswordResetEmail(email, linkResult.link);
     } catch {
       return {
         sent: false,
-        error: "We couldn't send a reset link right now. Try again in a moment.",
+        error:
+          "We couldn't send a reset link right now. Try again in a moment.",
       };
     }
 

@@ -9,16 +9,16 @@ import {
   Param,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import type { User } from '@prisma/client';
 
 import { EventsService } from '../events/events.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BearerAuthGuard } from '../session/bearer-auth.guard';
-import { getBearerToken } from '../session/bearer-token.util';
 import { CurrentUser } from '../session/current-user.decorator';
 import { SessionService } from '../session/session.service';
 import { AddCommentDto } from './dto/comments.dto';
@@ -37,9 +37,12 @@ export class CommentsController {
   ) {}
 
   @Get()
-  async list(@Param('id') id: string, @Req() req: Request) {
-    const token = getBearerToken(req);
-    const viewer = token ? await this.sessions.getUserForToken(token) : null;
+  async list(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const viewer = await this.sessions.getOptionalUser(req, res);
 
     return this.comments.getEventCommentsView(id, viewer?.id);
   }

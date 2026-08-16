@@ -80,7 +80,7 @@ export class HealthController {
 
     return {
       status,
-      service: "retalk-api",
+      service: "intouch-api",
       timestamp: new Date().toISOString(),
       checks: {
         app: { status: "ok" },

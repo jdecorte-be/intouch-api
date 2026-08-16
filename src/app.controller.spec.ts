@@ -15,7 +15,7 @@ describe("AppController", () => {
 
   describe("root", () => {
     it("reports the service as ok", () => {
-      expect(appController.root()).toEqual({ service: "retalk-api", status: "ok" });
+      expect(appController.root()).toEqual({ service: "intouch-api", status: "ok" });
     });
   });
 });

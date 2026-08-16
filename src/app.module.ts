@@ -20,6 +20,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReportsModule } from './reports/reports.module';
 import { SessionModule } from './session/session.module';
+import { SupertokensModule } from './supertokens/supertokens.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -29,6 +30,7 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     MailerModule,
     PasswordModule,
+    SupertokensModule,
     SessionModule,
     AuthModule,
     AvatarsModule,

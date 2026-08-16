@@ -4,6 +4,6 @@ import { Controller, Get } from "@nestjs/common";
 export class AppController {
   @Get()
   root() {
-    return { service: "retalk-api", status: "ok" };
+    return { service: "intouch-api", status: "ok" };
   }
 }

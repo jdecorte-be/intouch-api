@@ -8,7 +8,7 @@ cmds = ["npm ci --prefer-offline --no-audit --no-fund --progress=false"]
 
 [phases.build]
 cacheDirectories = [".nest/cache", "node_modules/.cache"]
-cmds = ["DATABASE_URL=postgresql://postgres:postgres@localhost:5432/retalk npx prisma generate", "npm run build"]
+cmds = ["DATABASE_URL=postgresql://postgres:postgres@localhost:5432/intouch npx prisma generate", "npm run build"]
 
 [start]
 cmd = "npx prisma migrate deploy && npm run start:prod"

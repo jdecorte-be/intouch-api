@@ -1,26 +1,30 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
-import type { Request } from "express";
-import type { User } from "@prisma/client";
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type { User } from '@prisma/client';
+import type { Request, Response } from 'express';
 
-import { SessionService } from "./session.service";
-import { getBearerToken } from "./bearer-token.util";
+import { PrismaService } from '../prisma/prisma.service';
+import { verifySupertokensSession } from './verify-supertokens-session';
 
 @Injectable()
 export class BearerAuthGuard implements CanActivate {
-  constructor(private readonly sessions: SessionService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request & { user?: User }>();
-    const token = getBearerToken(request);
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { user?: User }>();
+    const response = context.switchToHttp().getResponse<Response>();
 
-    if (!token) {
-      throw new UnauthorizedException("Unauthorized");
-    }
+    const userId = await verifySupertokensSession(request, response);
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
-    const user = await this.sessions.getUserForToken(token);
-
-    if (!user) {
-      throw new UnauthorizedException("Unauthorized");
+    if (!user || user.bannedAt) {
+      throw new UnauthorizedException('Unauthorized');
     }
 
     request.user = user;
