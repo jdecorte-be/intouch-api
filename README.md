@@ -1,98 +1,102 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# intouch-api
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend API for **InTouch**, an events and community app. Built with [NestJS](https://nestjs.com) 11, Prisma 7 (PostgreSQL) and [SuperTokens](https://supertokens.com) for authentication.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Features
 
-## Description
+- **Auth**: email/password and Google sign-in, sessions, password reset (SuperTokens), plus onboarding and account endpoints
+- **Events**: public discovery, user-created events, admin management and visibility control
+- **Social**: comments, interest toggles, event reports, chats (group and direct, with reactions and read state), notifications
+- **Admin**: stats, members (roles, bans), events and report moderation
+- **Utilities**: Mapbox address suggestions, generated avatars, health check, transactional email via Resend
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Requirements
 
-## Project setup
+- Node.js >= 24
+- PostgreSQL
+- A SuperTokens core (self-hosted or managed)
+
+## Getting started
 
 ```bash
-$ npm install
+npm install
+cp .env.example .env     # then fill in the values
+npx prisma generate
+npx prisma migrate dev   # apply migrations to your local database
+npm run start:dev
 ```
 
-## Compile and run the project
+The API listens on `PORT` (default `4000`).
 
-```bash
-# development
-$ npm run start
+## Environment variables
 
-# watch mode
-$ npm run start:dev
+See [`.env.example`](.env.example) for the full list.
 
-# production mode
-$ npm run start:prod
+| Variable | Purpose |
+| --- | --- |
+| `PORT` | HTTP port (default `4000`) |
+| `APP_BASE_URL` | Public URL of this API |
+| `WEB_APP_URL` | URL of the web client |
+| `CORS_ORIGINS` | Comma-separated allowed origins (all allowed if empty) |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `SUPERTOKENS_CONNECTION_URI`, `SUPERTOKENS_API_KEY` | SuperTokens core connection |
+| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth credentials |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Transactional email; emails are logged instead of sent if unset |
+| `MAPBOX_ACCESS_TOKEN` | Address suggestions |
+| `UMAMI_HEALTHCHECK_URL` | Optional; `/health` also checks Umami when set |
+
+Google redirect URIs to register: `<WEB_APP_URL>/auth/callback` (web) and `<APP_BASE_URL>/auth/mobile-callback` (native app, bridges to the `intouchapp://auth-callback` deep link).
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run start:dev` | Run in watch mode |
+| `npm run build` | Compile to `dist/` |
+| `npm run start:prod` | Run the compiled build |
+| `npm run lint` | ESLint (with autofix) |
+| `npm run format` | Prettier |
+| `npm test` | Unit tests |
+| `npm run test:e2e` | End-to-end tests |
+| `npm run test:cov` | Coverage |
+
+## API overview
+
+SuperTokens serves its own routes (sign up, sign in, sign out, refresh, Google, password reset) under `/auth`. Everything else is routed by Nest.
+
+| Area | Routes |
+| --- | --- |
+| Auth | `GET /auth/session`, `GET /auth/mobile-callback`, `PATCH /auth/onboarding`, `PATCH /auth/account`, `POST /auth/account/password-reset` |
+| Events | `GET /events`, `GET /events/mine`, `GET /events/:id`, `POST /events`, `PATCH /events/:id`, `DELETE /events/:id` |
+| Comments | `GET/POST /events/:id/comments`, `DELETE /events/:id/comments/:commentId` |
+| Interest | `GET /events/:id/interest`, `POST /events/:id/interest/toggle` |
+| Reports | `GET/POST/DELETE /events/:id/report` |
+| Chats | `GET /chats`, `GET /chats/:threadId`, `POST /chats/join`, `POST /chats/direct`, `POST /chats/:threadId/{read,messages,leave}`, `POST /chats/:threadId/messages/:messageId/reactions` |
+| Notifications | `GET /notifications`, `PATCH /notifications/:id/read`, `POST /notifications/read-all` |
+| Users | `GET /me`, `GET /users/:id/profile` |
+| Utilities | `GET /geocode/address-suggestions`, `GET /avatars/beam/:seed`, `GET /health` |
+| Admin | `/admin/stats`, `/admin/events`, `/admin/members`, `/admin/reports` |
+
+Admin routes are protected by an admin guard. `GET /events` and `GET /geocode/address-suggestions` are public and open to any origin.
+
+## Project layout
+
+```
+src/
+  auth/ supertokens/ session/   authentication and guards
+  events/ comments/ event-interest/ reports/
+  chats/ notifications/ members/ users/ admin-stats/
+  geocode/ avatars/ health/
+  common/                       mailer, password, filters, formatting helpers
+  prisma/                       Prisma service
+prisma/                         schema and migrations
+test/                           e2e tests
 ```
 
-## Run tests
+## Database
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
+Schema lives in `prisma/schema.prisma`. Create a migration with `npx prisma migrate dev --name <name>`; production applies them with `npx prisma migrate deploy`.
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Deployed via Nixpacks (`nixpacks.toml`): `npm ci`, `prisma generate`, `npm run build`, then on start `prisma migrate deploy && npm run start:prod`. A `.dockerignore` is included for Docker-based deploys.
