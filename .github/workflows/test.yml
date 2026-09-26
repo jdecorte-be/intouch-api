@@ -27,3 +27,25 @@ jobs:
       - run: npx prisma generate
       - run: npm run build
       - run: npm test
+
+  # Records a GitHub "production" deployment (shown in the repo sidebar and
+  # Deployments tab) once tests pass on master. Dokploy does the actual deploy;
+  # this job waits for the live /health endpoint to answer. Skipped until the
+  # PRODUCTION_URL repository variable is set.
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push' && vars.PRODUCTION_URL != ''
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - name: Wait for production /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "${{ vars.PRODUCTION_URL }}/health" > /dev/null; then
+              echo "Production is healthy"; exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s"; sleep 10
+          done
+          echo "Production did not become healthy" >&2; exit 1
