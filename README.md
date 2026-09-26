@@ -1,24 +1,49 @@
-# intouch-api
+# InTouch API
 
 [![Test](https://github.com/jdecorte-be/intouch-api/actions/workflows/test.yml/badge.svg)](https://github.com/jdecorte-be/intouch-api/actions/workflows/test.yml)
 
-Backend API for **InTouch**, an events and community app. Built with [NestJS](https://nestjs.com) 11, Prisma 7 (PostgreSQL) and [SuperTokens](https://supertokens.com) for authentication.
+Welcome! This is the backend for InTouch, a mobile app for discovering local events and groups, joining their chats, and hosting your own activities.
 
-## Features
+## What's in the API
 
-- **Auth**: email/password and Google sign-in, sessions, password reset (SuperTokens), plus onboarding and account endpoints
-- **Events**: public discovery, user-created events, admin management and visibility control
-- **Social**: comments, interest toggles, event reports, chats (group and direct, with reactions and read state), notifications
-- **Admin**: stats, members (roles, bans), events and report moderation
-- **Utilities**: Mapbox address suggestions, generated avatars, health check, transactional email via Resend
+- **Auth and onboarding**: email and Google sign-in, sessions and password reset via SuperTokens, plus onboarding and account endpoints
+- **Events**: public discovery feed, user-hosted events and groups, admin management and visibility control
+- **Social**: comments, interest toggles, event reports, and notifications
+- **Chat**: group and direct threads with messages, images, reactions, and read state
+- **Admin**: stats, member roles and bans, event and report moderation
+- **Utilities**: Mapbox address suggestions, generated default avatars, health check, transactional email via Resend
 
-## Requirements
+## Development resources
 
-- Node.js >= 24
-- PostgreSQL
-- A SuperTokens core (self-hosted or managed)
+This is a [NestJS](https://nestjs.com) application written in TypeScript, backed by PostgreSQL.
+
+- **NestJS 11** on Express, with global validation (`class-validator`, unknown properties rejected), `helmet`, compression, and a global exception filter
+- **Prisma 7** with the `pg` driver adapter; schema and migrations in `prisma/`
+- **SuperTokens** for email/password, Google, and sessions (`src/supertokens/supertokens.config.ts`); guards in `src/session/`
+- **Rate limiting**: 100 requests/min per client globally (`@nestjs/throttler`), plus 20/min on `/auth` and 30/min on `/geocode` (`express-rate-limit`)
+- **Jest** unit tests that mock Prisma, so they need no database
+
+### Project structure
+
+```
+src/
+  auth/ supertokens/ session/         authentication, guards, current-user decorator
+  events/ comments/ event-interest/   events, discovery, comments, interest
+  reports/ notifications/             reports and in-app notifications
+  chats/                              threads, messages, reactions
+  members/ users/ admin-stats/        admin tools and public profiles
+  geocode/ avatars/ health/           Mapbox proxy, generated avatars, health check
+  common/                             mailer, password hashing, filters, format helpers
+  prisma/                             Prisma service
+prisma/                               schema and migrations
+test/                                 end-to-end tests
+```
+
+Controllers stay thin; business logic lives in the `*.service.ts` files.
 
 ## Getting started
+
+You need Node.js 24+, PostgreSQL, and a SuperTokens core (self-hosted or managed).
 
 ```bash
 make setup               # npm ci, prisma generate, creates .env from .env.example
@@ -38,7 +63,7 @@ npm run start:dev
 
 The API listens on `PORT` (default `4000`). Check it with `curl localhost:4000/health`.
 
-## Environment variables
+### Environment variables
 
 See [`.env.example`](.env.example) for the full list.
 
@@ -57,7 +82,7 @@ See [`.env.example`](.env.example) for the full list.
 
 Google redirect URIs to register: `<WEB_APP_URL>/auth/callback` (web) and `<APP_BASE_URL>/auth/mobile-callback` (native app, bridges to the `intouchapp://auth-callback` deep link).
 
-## Scripts
+### Scripts
 
 Run `make help` for all shortcuts. The main ones:
 
@@ -73,15 +98,7 @@ Run `make help` for all shortcuts. The main ones:
 | `make test-e2e` | `npm run test:e2e` | End-to-end tests (need a database and SuperTokens) |
 | `make migrate name=<name>` | `npx prisma migrate dev` | Create and apply a migration |
 
-## Testing
-
-Unit tests live next to the code as `*.spec.ts` and mock Prisma, so they need no database:
-
-```bash
-make test
-```
-
-GitHub Actions (`.github/workflows/test.yml`) generates the Prisma client, builds, and runs the unit tests on every push to `master`/`dev` and on pull requests.
+CI (`.github/workflows/test.yml`) generates the Prisma client, builds, and runs the unit tests on every push to `master` and `dev` and on pull requests. On `master` it then records a GitHub `production` deployment.
 
 ## API overview
 
@@ -106,26 +123,32 @@ Admin routes are protected by an admin guard. `GET /events` and `GET /geocode/ad
 
 - **Errors** are always JSON: `{ "error": "message" }`. Validation failures also include `details`, the list of per-field messages.
 - **Validation** rejects unknown properties in request bodies.
-- **Rate limits**: 100 requests/min per client globally, 20/min on `/auth`, 30/min on `/geocode`. The API expects to run behind one reverse proxy (`trust proxy` is set to 1).
-
-## Project layout
-
-```
-src/
-  auth/ supertokens/ session/   authentication and guards
-  events/ comments/ event-interest/ reports/
-  chats/ notifications/ members/ users/ admin-stats/
-  geocode/ avatars/ health/
-  common/                       mailer, password, filters, formatting helpers
-  prisma/                       Prisma service
-prisma/                         schema and migrations
-test/                           e2e tests
-```
+- **Proxy**: the API expects to run behind one reverse proxy (`trust proxy` is set to 1).
 
 ## Database
 
-Schema lives in `prisma/schema.prisma`. Create a migration with `npx prisma migrate dev --name <name>`; production applies them with `npx prisma migrate deploy`.
+The schema lives in `prisma/schema.prisma`. Create a migration with `make migrate name=<name>`; production applies migrations with `npx prisma migrate deploy`.
 
 ## Deployment
 
 Production runs on [Dokploy](https://dokploy.com), built with Nixpacks (`nixpacks.toml`): `npm ci`, `prisma generate`, `npm run build`, then on start `prisma migrate deploy && npm run start:prod`. Set the environment variables from [`.env.example`](.env.example) in the Dokploy application settings. A `.dockerignore` is included for Docker-based deploys.
+
+## Contributions
+
+> [!NOTE]
+> This is a proprietary project. Outside contributions are not accepted unless agreed in writing beforehand.
+
+If you have access and want to change something:
+
+- Check for existing issues before filing a new one.
+- Discuss larger changes before opening a PR.
+- Reuse existing modules and patterns, and keep controllers thin.
+- Add or update unit tests, and run `make lint` and `make test` before submitting.
+
+## Security disclosures
+
+If you discover a security issue, please report it privately to the maintainer rather than opening a public issue.
+
+## License
+
+Proprietary. Copyright (c) 2026 John Decorte. All rights reserved. No use, copying, or distribution without written permission.
