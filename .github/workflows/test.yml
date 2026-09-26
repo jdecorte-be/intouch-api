@@ -29,18 +29,19 @@ jobs:
       - run: npm test
 
   # Records a GitHub "production" deployment (shown in the repo sidebar and
-  # Deployments tab) once tests pass on master. Dokploy does the actual deploy;
-  # this job waits for the live /health endpoint to answer. Skipped until the
-  # PRODUCTION_URL repository variable is set.
+  # Deployments tab) once tests pass on master. Dokploy does the actual deploy.
+  # If the PRODUCTION_URL repository variable is set, the deployment links to it
+  # and the job waits for its /health endpoint to answer.
   deploy:
     needs: test
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push' && vars.PRODUCTION_URL != ''
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: ubuntu-latest
     environment:
       name: production
       url: ${{ vars.PRODUCTION_URL }}
     steps:
       - name: Wait for production /health
+        if: vars.PRODUCTION_URL != ''
         run: |
           for i in $(seq 1 30); do
             if curl -fsS "${{ vars.PRODUCTION_URL }}/health" > /dev/null; then
@@ -49,3 +50,5 @@ jobs:
             echo "Attempt $i failed, retrying in 10s"; sleep 10
           done
           echo "Production did not become healthy" >&2; exit 1
+      - name: Record deployment
+        run: echo "Deployed ${{ github.sha }} to production (Dokploy)"
