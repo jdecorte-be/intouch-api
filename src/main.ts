@@ -1,7 +1,9 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import compression from 'compression';
 import type { NextFunction, Request, Response } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import supertokens from 'supertokens-node';
 import { middleware as supertokensMiddleware } from 'supertokens-node/framework/express';
@@ -15,7 +17,11 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 const PUBLIC_CORS_PATHS = new Set(['/events', '/geocode/address-suggestions']);
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Behind a reverse proxy the client IP is in X-Forwarded-For; without this
+  // every request would share the proxy's IP for rate limiting.
+  app.set('trust proxy', 1);
 
   // contentSecurityPolicy is meant for browser-rendered pages; this is a
   // pure JSON API. crossOriginResourcePolicy is relaxed to cross-origin
@@ -34,7 +40,7 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: false,
+      forbidNonWhitelisted: true,
     }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
@@ -44,11 +50,38 @@ async function bootstrap() {
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+  if (configuredOrigins.length === 0 && process.env.NODE_ENV === 'production') {
+    throw new Error('CORS_ORIGINS must be set in production');
+  }
+
   app.enableCors({
     origin: configuredOrigins.length > 0 ? configuredOrigins : true,
     allowedHeaders: ['content-type', ...supertokens.getAllCORSHeaders()],
     credentials: true,
   });
+
+  // The global Nest ThrottlerGuard only covers Nest routes, so the SuperTokens
+  // middleware below (sign-in, sign-up, password reset) needs its own limiter,
+  // registered first. Geocode proxies to Mapbox with our token, so it gets a
+  // tighter limit to protect the quota.
+  app.use(
+    '/auth',
+    rateLimit({
+      windowMs: 60_000,
+      limit: 20,
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+    }),
+  );
+  app.use(
+    '/geocode',
+    rateLimit({
+      windowMs: 60_000,
+      limit: 30,
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+    }),
+  );
 
   // Serves SuperTokens' own auth routes (signup, signin, signout, session
   // refresh, Google authorisationurl/signinup, password reset) under

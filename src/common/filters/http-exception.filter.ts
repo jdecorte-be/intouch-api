@@ -50,9 +50,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
           : ((body as { message?: string | string[] }).message ??
             exception.message);
 
-      response.status(status).json({
-        error: Array.isArray(message) ? message.join(', ') : message,
-      });
+      // `error` stays a single string; per-field validation messages are
+      // also returned as `details` so clients don't have to split it.
+      response
+        .status(status)
+        .json(
+          Array.isArray(message)
+            ? { error: message.join(', '), details: message }
+            : { error: message },
+        );
       return;
     }
 
