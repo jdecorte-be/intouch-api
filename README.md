@@ -151,4 +151,4 @@ If you discover a security issue, please report it privately to the maintainer r
 
 ## License
 
-Proprietary. Copyright (c) 2026 John Decorte. All rights reserved. No use, copying, or distribution without written permission.
+Proprietary. Copyright (c) 2026 John Decorte. All rights reserved. See [LICENSE](./LICENSE); no use, copying, or distribution without written permission.
