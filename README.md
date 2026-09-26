@@ -1,7 +1,6 @@
 # intouch-api
 
 [![Test](https://github.com/jdecorte-be/intouch-api/actions/workflows/test.yml/badge.svg)](https://github.com/jdecorte-be/intouch-api/actions/workflows/test.yml)
-[![Deployment](https://img.shields.io/github/deployments/jdecorte-be/intouch-api/production?label=production)](https://github.com/jdecorte-be/intouch-api/deployments/production)
 
 Backend API for **InTouch**, an events and community app. Built with [NestJS](https://nestjs.com) 11, Prisma 7 (PostgreSQL) and [SuperTokens](https://supertokens.com) for authentication.
 
@@ -130,7 +129,3 @@ Schema lives in `prisma/schema.prisma`. Create a migration with `npx prisma migr
 ## Deployment
 
 Production runs on [Dokploy](https://dokploy.com), built with Nixpacks (`nixpacks.toml`): `npm ci`, `prisma generate`, `npm run build`, then on start `prisma migrate deploy && npm run start:prod`. Set the environment variables from [`.env.example`](.env.example) in the Dokploy application settings. A `.dockerignore` is included for Docker-based deploys.
-
-### Deployment status on GitHub
-
-After tests pass on `master`, the `deploy` job in `.github/workflows/test.yml` records a GitHub `production` deployment and waits for `<PRODUCTION_URL>/health` to respond. This is what the deployment badge above and the repo's **Deployments** sidebar show. To enable it, add the repository variable `PRODUCTION_URL` (Settings → Secrets and variables → Actions → Variables), e.g. `https://api.example.com` with no trailing slash. Until it is set, the job is skipped.
