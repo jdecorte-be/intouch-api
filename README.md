@@ -1,5 +1,7 @@
 # intouch-api
 
+[![Test](https://github.com/jdecorte-be/intouch-api/actions/workflows/test.yml/badge.svg)](https://github.com/jdecorte-be/intouch-api/actions/workflows/test.yml)
+
 Backend API for **InTouch**, an events and community app. Built with [NestJS](https://nestjs.com) 11, Prisma 7 (PostgreSQL) and [SuperTokens](https://supertokens.com) for authentication.
 
 ## Features
@@ -19,14 +21,22 @@ Backend API for **InTouch**, an events and community app. Built with [NestJS](ht
 ## Getting started
 
 ```bash
-npm install
-cp .env.example .env     # then fill in the values
-npx prisma generate
-npx prisma migrate dev   # apply migrations to your local database
+make setup               # npm ci, prisma generate, creates .env from .env.example
+# fill in .env, then:
+make migrate             # apply migrations to your local database
+make dev                 # start in watch mode
+```
+
+Without `make`:
+
+```bash
+npm ci && npx prisma generate
+cp .env.example .env
+npx prisma migrate dev
 npm run start:dev
 ```
 
-The API listens on `PORT` (default `4000`).
+The API listens on `PORT` (default `4000`). Check it with `curl localhost:4000/health`.
 
 ## Environment variables
 
@@ -37,7 +47,7 @@ See [`.env.example`](.env.example) for the full list.
 | `PORT` | HTTP port (default `4000`) |
 | `APP_BASE_URL` | Public URL of this API |
 | `WEB_APP_URL` | URL of the web client |
-| `CORS_ORIGINS` | Comma-separated allowed origins (all allowed if empty) |
+| `CORS_ORIGINS` | Comma-separated allowed origins. Required when `NODE_ENV=production`; all origins allowed in development if empty |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `SUPERTOKENS_CONNECTION_URI`, `SUPERTOKENS_API_KEY` | SuperTokens core connection |
 | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth credentials |
@@ -49,16 +59,29 @@ Google redirect URIs to register: `<WEB_APP_URL>/auth/callback` (web) and `<APP_
 
 ## Scripts
 
-| Command | Description |
-| --- | --- |
-| `npm run start:dev` | Run in watch mode |
-| `npm run build` | Compile to `dist/` |
-| `npm run start:prod` | Run the compiled build |
-| `npm run lint` | ESLint (with autofix) |
-| `npm run format` | Prettier |
-| `npm test` | Unit tests |
-| `npm run test:e2e` | End-to-end tests |
-| `npm run test:cov` | Coverage |
+Run `make help` for all shortcuts. The main ones:
+
+| Make | npm | Description |
+| --- | --- | --- |
+| `make dev` | `npm run start:dev` | Run in watch mode |
+| `make build` | `npm run build` | Compile to `dist/` |
+| `make start` | `npm run start:prod` | Run the compiled build |
+| `make lint` | `npm run lint` | ESLint (with autofix) |
+| `make format` | `npm run format` | Prettier |
+| `make test` | `npm test` | Unit tests |
+| `make test-cov` | `npm run test:cov` | Unit tests with coverage |
+| `make test-e2e` | `npm run test:e2e` | End-to-end tests (need a database and SuperTokens) |
+| `make migrate name=<name>` | `npx prisma migrate dev` | Create and apply a migration |
+
+## Testing
+
+Unit tests live next to the code as `*.spec.ts` and mock Prisma, so they need no database:
+
+```bash
+make test
+```
+
+GitHub Actions (`.github/workflows/test.yml`) generates the Prisma client, builds, and runs the unit tests on every push to `master`/`dev` and on pull requests.
 
 ## API overview
 
@@ -78,6 +101,12 @@ SuperTokens serves its own routes (sign up, sign in, sign out, refresh, Google, 
 | Admin | `/admin/stats`, `/admin/events`, `/admin/members`, `/admin/reports` |
 
 Admin routes are protected by an admin guard. `GET /events` and `GET /geocode/address-suggestions` are public and open to any origin.
+
+### Conventions
+
+- **Errors** are always JSON: `{ "error": "message" }`. Validation failures also include `details`, the list of per-field messages.
+- **Validation** rejects unknown properties in request bodies.
+- **Rate limits**: 100 requests/min per client globally, 20/min on `/auth`, 30/min on `/geocode`. The API expects to run behind one reverse proxy (`trust proxy` is set to 1).
 
 ## Project layout
 
