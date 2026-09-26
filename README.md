@@ -13,6 +13,10 @@ Welcome! This is the backend for InTouch, a mobile app for discovering local eve
 - **Admin**: stats, member roles and bans, event and report moderation
 - **Utilities**: Mapbox address suggestions, generated default avatars, health check, transactional email via Resend
 
+## Architecture
+
+![InTouch architecture: the Expo app and Next.js website talk to the NestJS API and PostgreSQL, hosted on Dokploy](docs/architecture.png)
+
 ## Development resources
 
 This is a [NestJS](https://nestjs.com) application written in TypeScript, backed by PostgreSQL.
